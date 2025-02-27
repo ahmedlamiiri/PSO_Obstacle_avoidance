@@ -1,0 +1,91 @@
+import numpy as np
+
+class PathCostCalculator:
+    def __init__(self, model):    #constructeur c'est une methode speciale appelé __init__ pour stocker les donnees
+        self.model = model   # model contenant les donnees nécessaires pour calculs
+        self.J_inf = float('inf')   #inf :  l'infinie
+        self.n = model['n']     #nombre de points intermédiaire de chemin ( sans point de départ et point d'arrivé)
+        self.H = model['H']     #
+
+    def dist_p2s(self, x, a, b):
+        d_ab = np.linalg.norm(a - b)   #longeur du segment [a b]
+        d_ax = np.linalg.norm(a - x)    # distance entre le point x et le premier point du segment
+        d_bx = np.linalg.norm(b - x)    #distance entre le point x et le deuxiéme point du segment
+
+        if d_ab != 0:    # distance [a b] different a zéro
+            if np.dot(a - b, x - b) * np.dot(b - a, x - a) >= 0: # np.dot : calculer le produit scalaire
+                                                                 # si le produits scalaire de deux vecteurs supérieur ou égal zéro signifie que
+                                                                 # le point x est projeté sur le segment
+                A = np.array([b - a, x - a])
+                dist = abs(np.linalg.det(A)) / d_ab
+                                            # calcule la distance enntre le point x et le segment [ab]
+            else:
+                dist = min(d_ax, d_bx)     # si le point x n'est pas projeté sur le segment , on choisir la distance minimale entre [ax] et [bx]
+        else:
+            dist = d_ax  # si les deux points sont confondus , distance = [ax] = [bx]
+
+        return dist
+
+    def calculate_cost(self, sol):
+        x, y, z = sol['x'], sol['y'], sol['z']   #coordonnee des points intermédiaires
+        xs, ys, zs = self.model['start']  #coordonnée de point de départ
+        xf, yf, zf = self.model['end']   #coordonnée de point d'arrivé
+
+        x_all = np.concatenate(([xs], x, [xf]))   #cordonnées  x de tout le chemin
+        y_all = np.concatenate(([ys], y, [yf]))   #cordonnées y de tout le chemin
+        z_all = np.concatenate(([zs], z, [zf]))    # coordonnées z de tout le chemin
+        N = len(x_all)    # nombre de tout les points de chemin
+
+        z_abs = np.array([z_all[i] + self.H[int(round(y_all[i])), int(round(x_all[i]))] for i in range(N)])
+                                                                           #calcule l'altitude de chaque point
+
+        J1 = sum(np.linalg.norm([x_all[i + 1] - x_all[i], y_all[i + 1] - y_all[i], z_abs[i + 1] - z_abs[i]]) for i in range(N - 1))
+                                                                            #calcule la distance totale du chemin
+
+        threats = self.model['threats']
+        drone_size = 1    #zone de collision
+        danger_dist = 10 * drone_size    # zone danger
+        J2 = 0
+
+        for threat in threats:
+            threat_x, threat_y, _, threat_radius = threat
+            for j in range(N - 1):
+                dist = self.dist_p2s(np.array([threat_x, threat_y]), np.array([x_all[j], y_all[j]]), np.array([x_all[j + 1], y_all[j + 1]]))
+                                                                    # calcule la distance entre le segment du chemin et le menace
+
+                if dist > (threat_radius + drone_size + danger_dist):
+                    threat_cost = 0       # drone est loin de menace
+                elif dist < (threat_radius + drone_size):
+                    threat_cost = self.J_inf  #drone passe le menace
+                else:
+                    threat_cost = (threat_radius + drone_size + danger_dist) - dist
+                J2 += threat_cost
+
+        zmax = self.model['zmax']   # altitude maximale
+        zmin = self.model['zmin']   #altitude minimale
+        J3 = sum(self.J_inf if z[i] < 0 else abs(z[i] - (zmax + zmin) / 2) for i in range(self.n))
+                                         #   si l'altitude inferieur a zéro j3 recoit l'infinie ( c a d le drone dans zone interdite ou sous la terre)
+                                          # sinon calculer la somme des alititudes
+        J4 = 0
+        turning_max = 45  # limite angle de virage
+        climb_max = 45    # limite angle de descente
+
+        for i in range(N - 2):
+            segment1_proj = np.array([x_all[i + 1] - x_all[i], y_all[i + 1] - y_all[i], 0])
+            segment2_proj = np.array([x_all[i + 2] - x_all[i + 1], y_all[i + 2] - y_all[i + 1], 0])
+                                              #projection des segments sur x et y
+            climb_angle1 = np.degrees(np.arctan2(z_abs[i + 1] - z_abs[i], np.linalg.norm(segment1_proj)))
+            climb_angle2 = np.degrees(np.arctan2(z_abs[i + 2] - z_abs[i + 1], np.linalg.norm(segment2_proj)))
+                                                  #calcule les deux angles  de descente successifs
+            cross_prod = np.cross(segment1_proj, segment2_proj)
+            turning_angle = np.degrees(np.arctan2(np.linalg.norm(cross_prod), np.dot(segment1_proj, segment2_proj)))
+
+            if abs(turning_angle) > turning_max:        #abs :valeur absolue
+                J4 += abs(turning_angle)
+            if abs(climb_angle2 - climb_angle1) > climb_max:
+                J4 += abs(climb_angle2 - climb_angle1)
+
+        b1, b2, b3, b4 = 5, 1, 10, 1
+
+        cost = b1 * J1 + b2 * J2 + b3 * J3 + b4 * J4
+        return cost
