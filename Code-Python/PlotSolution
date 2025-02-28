@@ -71,7 +71,7 @@ class PlotSolution:
         ax_top.plot(smoothed_points[0, :], smoothed_points[1, :], 'k-', linewidth=2)
                                                               #tracer la trajectoire lisée
                                                               #k- : couleur noire et ligne continue
-                                                             #  linewdth  ; largeur 2 pixels
+                                                             #  linewdth  : largeur 2 pixels
         ax_top.scatter([xs, xf], [ys, yf], color='red', s=50)
         ax_top.set_xlabel('x [m]')
         ax_top.set_ylabel('y [m]')
