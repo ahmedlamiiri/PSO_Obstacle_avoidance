@@ -1,0 +1,114 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import make_interp_spline
+
+
+class PlotSolution:
+
+
+
+    def __init__(self, sol, model, smooth_factor=0.5):
+
+        self.sol = sol
+        self.model = model
+        self.smooth_factor = smooth_factor
+
+
+            #lissage de la trajectoire
+    def smooth_path(self, points):
+        npts = points.shape[1]
+        smoothed_points = np.zeros_like(
+            points)
+        for i in range(points.shape[0]):
+            spl = make_interp_spline(np.arange(npts), points[i, :], k=3)
+            smoothed_points[i, :] = spl(np.arange(npts))
+
+        return smoothed_points
+
+    def plot_solution(self):
+     
+        fig = plt.figure(figsize=(15, 10))
+        ax = fig.add_subplot(131, projection='3d')
+
+
+        X, Y, H = self.model['X'], self.model['Y'], self.model['H'] #recupére les données du modéle
+        x, y, z = self.sol['x'], self.sol['y'], self.sol['z'] # recupére les données de chemin
+        xs, ys, zs = self.model['start']
+        xf, yf, zf = self.model['end']
+
+
+        x_all = np.concatenate(([xs], x, [xf]))
+        y_all = np.concatenate(([ys], y, [yf]))
+        z_all = np.concatenate(([zs], z, [zf]))
+
+        # Calcul de l'altitude absolue en fonction du terrain
+        z_abs = np.array([z_all[i] + H[int(round(y_all[i])), int(round(x_all[i]))] for i in range(len(x_all))])
+
+        # Lissage de la trajectoire
+        points = np.array([x_all, y_all, z_abs])
+        smoothed_points = self.smooth_path(points)
+
+
+        ax.plot_surface(X, Y, H, cmap='summer', alpha=0.2, edgecolor='none') # tracer du terrain en 3d
+
+
+        ax.plot(smoothed_points[0, :], smoothed_points[1, :], smoothed_points[2, :], 'k-', linewidth=2)
+                                                                       # tracer la trajectoire lisée en 3d
+
+        ax.scatter([xs, xf], [ys, yf], [zs, zf], color='red', s=50, label='Start/End')
+                                                         #ajouter le point de départ et point d'arrivé
+
+        
+        ax.legend()
+        ax.set_xlabel('x [m]')
+        ax.set_ylabel('y [m]')
+        ax.set_zlabel('z [m]')
+        ax.set_title('3D View')
+
+        # Vue de dessus (2D)
+        ax_top = fig.add_subplot(132)
+        ax_top.contourf(X, Y, H, cmap='summer')
+        ax_top.plot(smoothed_points[0, :], smoothed_points[1, :], 'k-', linewidth=2)
+                                                              #tracer la trajectoire lisée
+                                                              #k- : couleur noire et ligne continue
+                                                             #  linewdth  ; largeur 2 pixels
+        ax_top.scatter([xs, xf], [ys, yf], color='red', s=50)
+        ax_top.set_xlabel('x [m]')
+        ax_top.set_ylabel('y [m]')
+        ax_top.set_title('Top View')
+
+        # Vue latérale
+        ax_side = fig.add_subplot(133)
+        ax_side.plot(smoothed_points[0, :], smoothed_points[2, :], 'k-', linewidth=2)
+        ax_side.scatter([xs, xf], [zs, zf], color='red', s=50)
+        ax_side.set_xlabel('x [m]')
+        ax_side.set_ylabel('z [m]')
+        ax_side.set_title('Side View')
+
+        plt.tight_layout()
+        plt.show()
+
+
+
+model = {
+    'X': np.arange(0, 100, 1),  # Axe X du terrain
+    'Y': np.arange(0, 100, 1),  # Axe Y du terrain
+    'H': np.random.uniform(0, 50, (100, 100)),  # Hauteur du terrain aléatoire
+    'start': [10, 10, 0],  # Point de départ
+    'end': [90, 90, 0]  # Point d'arrivée
+}
+
+
+X, Y = np.meshgrid(model['X'], model['Y'])
+model['X'], model['Y'] = X, Y
+
+
+sol = {
+    'x': np.linspace(10, 90, 10),
+    'y': np.linspace(10, 90, 10),
+    'z': np.zeros(10)
+}
+
+# Création et affichage du tracé
+plotter = PlotSolution(sol, model)
+plotter.plot_solution()
