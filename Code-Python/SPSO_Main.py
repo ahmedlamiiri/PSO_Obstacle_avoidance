@@ -188,7 +188,7 @@ class PSO:
 
 if __name__ == "__main__":
     # Import the configuration from your model or any other necessary file
-    from model import terrain_file, threats, bounds, start_location, end_location, n
+    from CreateModel import terrain_file, threats, bounds, start_location, end_location, n
 
     terrain_model = TerrainModel(terrain_file, threats, bounds, start_location, end_location, n)
     pso = PSO(terrain_model)
